@@ -140,3 +140,151 @@ export function linearGradient(id, stops, attrs = {}) {
     )
   );
 }
+
+// ---- Path builder DSL ------------------------------------------------------
+// Usage:
+//   const p = new PathNode({ stroke:"#fff", strokeWidth:3, fill:"none", strokeLinecap:"round" })
+//     .M(VEC_BOX, VEC_SIZE)
+//     .H(VEC_SIZE)
+//     .V((VEC_BOX)/2 * 5)
+//     .H(VEC_BOX + VEC_SIZE/12*2)
+//     .M(VEC_SIZE, (VEC_BOX)/2 * 5)
+//     .H(VEC_BOX + VEC_SIZE/12*6)
+//     .M(VEC_BOX + VEC_SIZE/12*6, (VEC_BOX)/2 * 5)
+//     .L(VEC_BOX + VEC_SIZE/12*6 - 5, (VEC_BOX)/2 * 5 + 15)
+//     .M(VEC_BOX, VEC_SIZE)
+//     .V((VEC_BOX)/2 * 5);
+//
+//   const ICON_VEC = [ p.toNode() ];
+
+export class NodeBase {
+  constructor(attrs = {}) {
+    this.attrs = { ...attrs };
+  }
+  set(key, value) {
+    this.attrs[key] = value;
+    return this;
+  }
+  merge(attrs = {}) {
+    Object.assign(this.attrs, attrs);
+    return this;
+  }
+}
+export class PathNode extends NodeBase {
+  constructor(attrs = {}) {
+    super(attrs);
+    this._seg = [];
+    this._x = null;
+    this._y = null;
+  }
+
+  _needXY(cmdName) {
+    if (this._x === null || this._y === null) {
+      throw new Error(`${cmdName}: current (x,y) unknown. Call M(x,y) first.`);
+    }
+  }
+
+  // ---- path commands (absolute) ----
+  M(x, y) {
+    this._seg.push(`M${x} ${y}`);
+    this._x = x; this._y = y;
+    return this;
+  }
+
+  L(x, y) {
+    this._seg.push(`L${x} ${y}`);
+    this._x = x; this._y = y;
+    return this;
+  }
+
+  H(x) {
+    this._needXY("H");
+    this._seg.push(`H${x}`);
+    this._x = x;
+    return this;
+  }
+
+  V(y) {
+    this._needXY("V");
+    this._seg.push(`V${y}`);
+    this._y = y;
+    return this;
+  }
+
+  C(x1, y1, x2, y2, x, y) {
+    this._seg.push(`C${x1} ${y1} ${x2} ${y2} ${x} ${y}`);
+    this._x = x; this._y = y;
+    return this;
+  }
+
+  Q(x1, y1, x, y) {
+    this._seg.push(`Q${x1} ${y1} ${x} ${y}`);
+    this._x = x; this._y = y;
+    return this;
+  }
+
+  A(rx, ry, rot, largeArc, sweep, x, y) {
+    this._seg.push(`A${rx} ${ry} ${rot} ${largeArc ? 1 : 0} ${sweep ? 1 : 0} ${x} ${y}`);
+    this._x = x; this._y = y;
+    return this;
+  }
+
+  Z() { this._seg.push("Z"); return this; }
+
+  // ---- your requested "pen" helpers ----
+  // pH(dx): x += dx, draw to (x, same y)
+  pH(dx) {
+    this._needXY("pH");
+    const nx = this._x + dx;
+    // use L so it's unambiguous and keeps state correct
+    return this.L(nx, this._y);
+  }
+
+  // pV(dy): y += dy, draw to (same x, y)
+  pV(dy) {
+    this._needXY("pV");
+    const ny = this._y + dy;
+    return this.L(this._x, ny);
+  }
+
+  // ---- optional: relative variants that also track state ----
+  m(dx, dy) {
+    // relative move: x += dx, y += dy (no line)
+    const x = (this._x ?? 0) + dx;
+    const y = (this._y ?? 0) + dy;
+    this._seg.push(`m${dx} ${dy}`);
+    this._x = x; this._y = y;
+    return this;
+  }
+
+  l(dx, dy) {
+    this._needXY("l");
+    this._seg.push(`l${dx} ${dy}`);
+    this._x += dx; this._y += dy;
+    return this;
+  }
+
+  h(dx) {
+    this._needXY("h");
+    this._seg.push(`h${dx}`);
+    this._x += dx;
+    return this;
+  }
+
+  v(dy) {
+    this._needXY("v");
+    this._seg.push(`v${dy}`);
+    this._y += dy;
+    return this;
+  }
+
+  d() {
+    return this._seg.join(" ");
+  }
+
+  toNode(extraAttrs = {}) {
+    return path({ d: this.d(), ...this.attrs, ...extraAttrs });
+  }
+}
+
+

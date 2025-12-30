@@ -12,7 +12,7 @@ function wrapAsFunctionBody(code) {
     h, render,
     svg, g, defs,
     rect, circle, ellipse, line, path, polyline, polygon, text,
-    rr, rgba, centerXY, linearGradient
+    rr, rgba, centerXY, linearGradient, PathNode,
   } = F;
 
   ${code}
